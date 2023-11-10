@@ -23,6 +23,8 @@ import unicodedata
 import cv2
 import pickle
 from PIL import Image
+from werkzeug.utils import secure_filename
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -54,6 +56,11 @@ gifticons = [
     {"gifticon_name" : "중앙 떡볶이", "require_point" : 20},
     {"gifticon_name" : "은하네 우동집", "require_point" : 30}
 ]
+@app.route('/api/test', methods=['GET'])
+def test_api():
+    data = {"message": "This is a test response from Flask API"}
+    print('sdf')
+    return jsonify(data)
 
 # user list
 @app.route('/api/users', methods=['GET'])
@@ -157,31 +164,40 @@ class VerificationModel:
         n = output1.shape[0]
         output2 = torch.cat([output2] * n)
 
-        count = sum(torch.pow(output1 - output2, 2).sum(dim=1).sqrt() < 0.68)
+        count = sum(torch.pow(output1 - output2, 2).sum(dim=1).sqrt() < 0.69)
         result = (count >= 1).int()
         return result.item()
 
 @app.route('/api/check', methods=['POST'])
 def check_picture():
-    data = request.json
-    # input_path = 입력 이미지 경로
-    # keyword = 해당 장소
+    print("Start inference...")
+    # 파일과 텍스트 데이터를 받습니다.
+    text_data = request.form.get('text')
+    file = request.files.get('file')
+    print(text_data)
+    print(file)
+    if file:
+        # 파일명을 안전하게 만들어줍니다.
+        filename = secure_filename(file.filename)
+        # 파일을 저장할 경로를 설정합니다.
+        input_path = './' +filename
+        # 파일을 저장합니다.
+        file.save(input_path)
     
-    # jsom 형태로 받아오면
-    # input_path = data.get('input_path')
-    # keyword = data.get('keyword')
+    # 텍스트 데이터를 처리합니다.
+    keyword = text_data
     
+    # 모델 경로와 피클 파일 경로를 설정합니다.
     model_path = './best_model.pth'
     pickle_path = "image_test_dict.pickle"
 
+    # 모델을 로드하고 예측을 수행합니다.
     inference_model = VerificationModel(model_path, pickle_path)
     result = inference_model.predict(input_path, keyword)
-    #print(result)
-    if result == 1:
-        judge = True
-    else:
-        judge = False
-    return jsonify({"Judge" : judge})
+    
+    # 결과에 따라 True 또는 False를 반환합니다.
+    judge = result == 1
+    return jsonify({"Judge": judge})
 
 # create user
 @app.route('/api/create_users', methods=['POST'])
@@ -198,4 +214,4 @@ def create_user():
     return jsonify({"message": "User created successfully", "user": new_user}), 201
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
